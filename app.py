@@ -1,35 +1,23 @@
-from flask import Flask, request, jsonify
+import os
 from mnemonic import Mnemonic
+from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins
 
-app = Flask(__name__)
-mnemo = Mnemonic("english")
+# Load 12-word phrase from env variable
+mnemonic_phrase = os.environ.get("MNEMONIC_12")
 
-@app.route('/check', methods=['POST'])
-def check():
-    data = request.get_json()
-    words = data.get('words', '').strip()
-    words_list = words.split()
+def is_valid_mnemonic(mnemonic_phrase):
+    mnemo = Mnemonic("english")
+    return mnemo.check(mnemonic_phrase)
 
-    if len(words_list) not in [11, 12]:
-        return jsonify({"error": "Please provide 11 or 12 words"}), 400
+def derive_eth_address(mnemonic_phrase):
+    seed_bytes = Bip39SeedGenerator(mnemonic_phrase).Generate()
+    bip44_mst = Bip44.FromSeed(seed_bytes, Bip44Coins.ETHEREUM)
+    return bip44_mst.PublicKey().ToAddress()
 
-    valid_phrases = []
-
-    if len(words_list) == 11:
-        for w in mnemo.wordlist:
-            phrase = words_list + [w]
-            phrase_str = ' '.join(phrase)
-            if mnemo.check(phrase_str):
-                valid_phrases.append(phrase_str)
-    else:
-        phrase_str = ' '.join(words_list)
-        if mnemo.check(phrase_str):
-            valid_phrases.append(phrase_str)
-
-    if not valid_phrases:
-        return jsonify({"valid_phrases": [], "message": "No valid phrase found."})
-
-    return jsonify({"valid_phrases": valid_phrases})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+if not mnemonic_phrase:
+    print("No mnemonic phrase provided in MNEMONIC_12 env variable.")
+elif not is_valid_mnemonic(mnemonic_phrase):
+    print("❌ Invalid BIP39 mnemonic.")
+else:
+    eth_address = derive_eth_address(mnemonic_phrase)
+    print(f"✅ Valid mnemonic. Derived Ethereum address: {eth_address}")
